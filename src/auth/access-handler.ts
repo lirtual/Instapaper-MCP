@@ -10,6 +10,11 @@ type StoredState = {
   createdAt: number;
 };
 
+type ConsentState = {
+  oauthRequest: AuthRequest;
+  createdAt: number;
+};
+
 function base64url(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("base64url");
 }
@@ -23,6 +28,39 @@ function randomVerifier(): string {
 async function sha256Base64url(value: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return base64url(new Uint8Array(digest));
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function consentPage(clientName: string, token: string): Response {
+  const body = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Authorize Instapaper MCP</title></head><body>
+<main style="max-width:560px;margin:64px auto;font:16px system-ui;line-height:1.5">
+<h1>Authorize Instapaper MCP</h1>
+<p><strong>${escapeHtml(clientName)}</strong> is requesting access to your Instapaper MCP server.</p>
+<p>This connection can read and modify your Instapaper library according to the MCP tools you approve in the client.</p>
+<form method="post" action="/authorize">
+<input type="hidden" name="consent_token" value="${escapeHtml(token)}">
+<button type="submit" name="decision" value="approve">Continue with Cloudflare Access</button>
+<button type="submit" name="decision" value="deny">Deny</button>
+</form></main></body></html>`;
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
 }
 
 function parseJwt(token: string) {
@@ -82,6 +120,30 @@ async function redirectToAccess(request: Request, env: OAuthEnv, oauthRequest: A
   return Response.redirect(authorize.toString(), 302);
 }
 
+async function startConsent(request: Request, env: OAuthEnv) {
+  const oauthRequest = await env.OAUTH_PROVIDER.parseAuthRequest(request);
+  if (!oauthRequest.clientId) return new Response("Invalid OAuth client.", { status: 400 });
+  const consentToken = crypto.randomUUID();
+  const stored: ConsentState = { oauthRequest, createdAt: Date.now() };
+  await env.OAUTH_KV.put(`consent:${consentToken}`, JSON.stringify(stored), { expirationTtl: 600 });
+  const client = await env.OAUTH_PROVIDER.lookupClient(oauthRequest.clientId);
+  const clientName = client?.clientName ?? oauthRequest.clientId;
+  return consentPage(clientName, consentToken);
+}
+
+async function finishConsent(request: Request, env: OAuthEnv) {
+  const form = await request.formData();
+  const token = form.get("consent_token");
+  const decision = form.get("decision");
+  if (typeof token !== "string") return new Response("Missing consent token.", { status: 400 });
+  const storedRaw = await env.OAUTH_KV.get(`consent:${token}`);
+  await env.OAUTH_KV.delete(`consent:${token}`);
+  if (!storedRaw) return new Response("Consent request is missing or expired.", { status: 400 });
+  if (decision !== "approve") return new Response("Authorization denied.", { status: 403 });
+  const stored = JSON.parse(storedRaw) as ConsentState;
+  return redirectToAccess(request, env, stored.oauthRequest);
+}
+
 async function handleCallback(request: Request, env: OAuthEnv) {
   const url = new URL(request.url);
   const state = url.searchParams.get("state");
@@ -135,9 +197,21 @@ export const accessAuthHandler: ExportedHandler<Env> = {
   async fetch(request, baseEnv) {
     const env = baseEnv as OAuthEnv;
     const url = new URL(request.url);
-    if (request.method === "GET" && url.pathname === "/authorize") {
-      const oauthRequest = await env.OAUTH_PROVIDER.parseAuthRequest(request);
-      return redirectToAccess(request, env, oauthRequest);
+    if (url.pathname === "/authorize" && request.method === "GET") {
+      try {
+        return await startConsent(request, env);
+      } catch (error) {
+        console.error("OAuth authorization failed", error instanceof Error ? error.message : "unknown error");
+        return new Response("Invalid OAuth authorization request.", { status: 400 });
+      }
+    }
+    if (url.pathname === "/authorize" && request.method === "POST") {
+      try {
+        return await finishConsent(request, env);
+      } catch (error) {
+        console.error("OAuth consent failed", error instanceof Error ? error.message : "unknown error");
+        return new Response("OAuth consent failed.", { status: 400 });
+      }
     }
     if (request.method === "GET" && url.pathname === "/callback") {
       try {
