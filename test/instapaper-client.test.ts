@@ -42,8 +42,9 @@ describe("InstapaperClient", () => {
     const client = new InstapaperClient(credentials, fetchMock as unknown as typeof fetch);
 
     await client.listHighlights(42);
-    expect(fetchMock.mock.calls[0][0]).toBe(
+    expect(fetchMock).toHaveBeenCalledWith(
       "https://www.instapaper.com/api/1.1/bookmarks/42/highlights",
+      expect.objectContaining({ method: "POST" }),
     );
   });
 });
