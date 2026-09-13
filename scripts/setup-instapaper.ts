@@ -1,11 +1,23 @@
 #!/usr/bin/env node
 
+import { spawnSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { exchangeXAuth } from "../src/instapaper/oauth.js";
 import { InstapaperClient } from "../src/instapaper/client.js";
 
 const rl = createInterface({ input, output });
+
+function putSecret(name: string, value: string) {
+  const result = spawnSync("npx", ["wrangler", "secret", "put", name], {
+    input: `${value}\n`,
+    encoding: "utf8",
+    stdio: ["pipe", "inherit", "inherit"],
+  });
+  if (result.status !== 0) {
+    throw new Error(`Failed to store ${name} with Wrangler.`);
+  }
+}
 
 async function main() {
   const consumerKey = process.env.INSTAPAPER_CONSUMER_KEY || (await rl.question("Instapaper consumer key: ")).trim();
@@ -27,12 +39,12 @@ async function main() {
   const user = await client.verifyCredentials();
 
   output.write(`\nAuthenticated as ${user.username ?? user.user_id ?? "Instapaper user"}.\n`);
-  output.write("Store these values as Cloudflare Worker secrets (do not commit them):\n\n");
-  output.write("npx wrangler secret put INSTAPAPER_CONSUMER_KEY\n");
-  output.write("npx wrangler secret put INSTAPAPER_CONSUMER_SECRET\n");
-  output.write("npx wrangler secret put INSTAPAPER_OAUTH_TOKEN\n");
-  output.write("npx wrangler secret put INSTAPAPER_OAUTH_TOKEN_SECRET\n\n");
-  output.write("OAuth token values are intentionally not printed. Re-run this command with a secure secret-capture workflow if needed.\n");
+  output.write("Writing credentials to Cloudflare Worker secrets...\n");
+  putSecret("INSTAPAPER_CONSUMER_KEY", consumerKey);
+  putSecret("INSTAPAPER_CONSUMER_SECRET", consumerSecret);
+  putSecret("INSTAPAPER_OAUTH_TOKEN", tokens.token);
+  putSecret("INSTAPAPER_OAUTH_TOKEN_SECRET", tokens.tokenSecret);
+  output.write("Instapaper credentials stored. Username/password were not persisted.\n");
 }
 
 main()
