@@ -3,9 +3,9 @@
   "version": "2.0.0",
   "description": "Instapaper MCP server for Cloudflare Workers and stdio clients",
   "type": "module",
-  "main": "build/stdio.js",
+  "main": "build/src/stdio.js",
   "bin": {
-    "instapaper-mcp": "./build/stdio.js"
+    "instapaper-mcp": "./build/src/stdio.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -26,12 +26,12 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260901.0",
+    "@cloudflare/workers-types": "^5.20260911.1",
     "@types/node": "^24.0.0",
     "tsx": "^4.20.0",
     "typescript": "^6.0.0",
     "vitest": "^3.2.4",
-    "wrangler": "^4.35.0"
+    "wrangler": "^4.105.0"
   },
   "keywords": [
     "mcp",
