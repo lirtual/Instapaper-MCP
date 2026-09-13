@@ -106,10 +106,7 @@ async function handleCallback(request: Request, env: OAuthEnv) {
     }),
   });
   if (!tokenResponse.ok) return new Response("Cloudflare Access token exchange failed.", { status: 502 });
-  const tokenData = (await tokenResponse.json()) as {
-    access_token?: string;
-    id_token?: string;
-  };
+  const tokenData = (await tokenResponse.json()) as { access_token?: string; id_token?: string };
   if (!tokenData.id_token || !tokenData.access_token) {
     return new Response("Cloudflare Access did not return the expected tokens.", { status: 502 });
   }
@@ -134,8 +131,9 @@ async function handleCallback(request: Request, env: OAuthEnv) {
   return Response.redirect(redirectTo, 302);
 }
 
-export const accessAuthHandler: ExportedHandler<OAuthEnv> = {
-  async fetch(request, env) {
+export const accessAuthHandler: ExportedHandler<Env> = {
+  async fetch(request, baseEnv) {
+    const env = baseEnv as OAuthEnv;
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/authorize") {
       const oauthRequest = await env.OAUTH_PROVIDER.parseAuthRequest(request);
