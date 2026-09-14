@@ -1,33 +1,42 @@
 {
   "name": "instapaper-mcp-server",
-  "version": "1.0.0",
-  "description": "A comprehensive MCP server for Instapaper integration",
+  "version": "2.0.0",
+  "description": "Instapaper MCP server for Cloudflare Workers and stdio clients",
   "type": "module",
-  "main": "build/index.js",
+  "main": "build/src/stdio.js",
   "bin": {
-    "instapaper-mcp": "./build/index.js"
+    "instapaper-mcp": "./build/src/stdio.js"
   },
   "scripts": {
-    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
-    "watch": "tsc --watch",
-    "prepare": "npm run build",
-    "inspector": "npx @modelcontextprotocol/inspector build/index.js"
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:dry-run": "wrangler deploy --dry-run",
+    "stdio": "tsx src/stdio.ts",
+    "inspector": "npx @modelcontextprotocol/inspector npx tsx src/stdio.ts",
+    "setup:instapaper": "tsx scripts/setup-instapaper.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "dotenv": "^16.4.5",
+    "@modelcontextprotocol/server": "2.0.0",
+    "agents": "^0.20.0",
     "oauth-1.0a": "^2.2.6",
-    "node-fetch": "^3.3.2"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/node": "^20.11.24",
-    "typescript": "^5.3.3"
+    "@cloudflare/workers-types": "^5.20260911.1",
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^6.0.0",
+    "vitest": "^3.2.4",
+    "wrangler": "^4.105.0"
   },
   "keywords": [
     "mcp",
     "instapaper",
-    "model-context-protocol"
+    "model-context-protocol",
+    "cloudflare-workers"
   ],
-  "author": "",
   "license": "MIT"
 }
